@@ -1,3 +1,5 @@
+포트폴리오용으로 본인이 작성한 코드만 업로드한 레포지토리입니다.
+
 # LOL 집중포화 모작
 ![Image](https://github.com/user-attachments/assets/0c313b28-1a03-429b-b14b-a59a6c1bcd69)
 - 2024년 LOL 여름 이벤트 뱀서라이크 모드 집중포화의 모작
