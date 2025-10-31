@@ -26,8 +26,6 @@ public class AllyFSM : MonoBehaviour
     private Animator anim;
     private GameObject player;
     private BSkill bSkill;
-    private ESkill eSkill;
-    private RSkill rSkill;
 
     #endregion
 
@@ -46,8 +44,6 @@ public class AllyFSM : MonoBehaviour
         damageUI = gameObject.GetComponentInChildren<DamageUI>();
 
         bSkill = GetComponent<BSkill>();
-        eSkill = GetComponent<ESkill>();
-        rSkill = GetComponent<RSkill>();
         
         moveDir = Vector3.right;
 
@@ -163,7 +159,7 @@ public class AllyFSM : MonoBehaviour
 
     void ReturnToPlayer()
     {
-        if (!bSkill.isBSkill && !eSkill.IsESkill && !rSkill.isRSkill)
+        if (!attackManager.IsOnSkill)
         {
             transform.position = player.transform.position + new Vector3(2, 0, 0);
             a_State = AllyState.Move;

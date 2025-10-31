@@ -7,9 +7,8 @@ public class AllyNavMesh : MonoBehaviour
     private GameObject player;
     private AllyFSM allyFSM;
     private AllyBodyRot allyBodyRot;
+    private AttackManager attackManager;
     private BSkill bSkill;
-    private ESkill eSkill;
-    private RSkill rSkill;
     private Boss boss;
 
     [SerializeField] internal float moveSpeed = 25f;
@@ -24,9 +23,8 @@ public class AllyNavMesh : MonoBehaviour
         player = GameObject.Find("Player");
         allyFSM = GetComponent<AllyFSM>();
         allyBodyRot = GetComponent<AllyBodyRot>();
+        attackManager = GetComponent<AttackManager>();
         bSkill = GetComponent<BSkill>();
-        eSkill = GetComponent<ESkill>();
-        rSkill = GetComponent<RSkill>();
     }
     void Start()
     {
@@ -39,7 +37,7 @@ public class AllyNavMesh : MonoBehaviour
         if (GameManager.instance.isStop) return;
         currTime += Time.deltaTime;
 
-        if (currTime > changeTime && !eSkill.IsESkill && !bSkill.isBSkill && !rSkill.isRSkill)
+        if (currTime > changeTime && attackManager.IsOnSkill)
         {
             if (GameManager.instance.bossSpawn)
             {

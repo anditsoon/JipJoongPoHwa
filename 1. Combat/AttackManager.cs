@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Cysharp.Threading.Tasks;
+using System;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 
 public class AttackManager : MonoBehaviour
@@ -13,8 +15,9 @@ public class AttackManager : MonoBehaviour
     [SerializeField] private SkillEvolve skillEv;
     [SerializeField] private SkillPassive skillP;
 
-    private List<SkillBase> activeSkills = new List<SkillBase>();
-    private Queue<SkillBase> executionQueue = new Queue<SkillBase>();
+    private Queue<SkillBase> skillQueue = new Queue<SkillBase>();
+    private float delayBtwSkills = 0.2f;
+    public bool IsOnSkill = false;
 
     private void Awake()
     {
@@ -29,26 +32,14 @@ public class AttackManager : MonoBehaviour
 
         pm.OnLevelChanged += ApplyLevelSettings;
         GameManager.instance.IsStopped += HandleStop;
-    }
 
-    private void Update()
-    {
-        // 쿨타임 끝난 스킬들 큐에 넣기
-        foreach (var skill in activeSkills)
+        SkillBase[] skills = { skillB, skillE, skillR, skillEv, skillP };
+        foreach (var s in skills)
         {
-            if (skill.IsReady())
-            {
-                executionQueue.Enqueue(skill);
-            }
+            s.OnReady += EnqueueSkill;
         }
 
-        // 큐에서 하나씩 실행
-        int count = executionQueue.Count;
-        for (int i = 0; i < count; i++)
-        {
-            SkillBase skill = executionQueue.Dequeue();
-            skill.TryExecute();
-        }
+        StartQueueLoop();
     }
 
     private void ApplyLevelSettings(int level)
@@ -56,27 +47,29 @@ public class AttackManager : MonoBehaviour
         switch (level)
         {
             case 1:
-                skillB.BSkillTime = 5;
+                skillB.BCoolTime = 5;
                 skillB.attackNum = 3;
                 break;
             case 2:
-                skillB.BSkillTime = 4;
+                skillB.BCoolTime = 4;
                 break;
             case 3:
-                skillB.BSkillTime = 3;
+                skillB.BCoolTime = 3;
+                skillE.IsReady = true;
                 skillE.Cooldown = 9;
-                skillB.BSkillTime = 4;
                 break;
             case 4:
-                skillB.BSkillTime = 2;
+                skillB.BCoolTime = 2;
                 skillE.Cooldown = 7;
                 break;
             case 5:
                 skillE.Cooldown = 5;
                 skillB.attackNum = 5;
+                skillR.IsReady = true;
                 skillR.Cooldown = 20;
                 break;
             case 7:
+                skillEv.IsReady = true;
                 skillEv.Cooldown = 10;
                 break;
         }
@@ -87,9 +80,30 @@ public class AttackManager : MonoBehaviour
         enabled = !stop;
     }
 
-    public void AddSkill(SkillBase skill)
+    private void EnqueueSkill(SkillBase skill)
     {
-        if (!activeSkills.Contains(skill))
-            activeSkills.Add(skill);
+        skillQueue.Enqueue(skill);
+    }
+
+    private async UniTaskVoid StartQueueLoop()
+    {
+        while (!GameManager.instance.IsStop)
+        {
+            if(skillQueue.Count > 0)
+            {
+                await UniTask.WaitUntil(() => !IsOnSkill);
+                var skill = skillQueue.Dequeue();
+
+                skill.TryExecute();
+
+                // 각 스킬 실행 간 간격 (살짝 텀을 주기)
+                await UniTask.Delay(TimeSpan.FromSeconds(delayBtwSkills));
+            }
+            else
+            {
+                // 큐가 비어 있으면 잠깐 대기
+                await UniTask.Yield();
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Pool;
 
@@ -10,9 +11,9 @@ public abstract class SkillBase : MonoBehaviour
     // 가져오기
     internal Animator anim;
     internal GameObject allyBody;
-    private AttackManager attackMng;
     internal AIlyHPSystem hpSystem;
     internal H_PlayerManager playerManager;
+    internal AttackManager attackManager;
     internal AllyNavMesh allyNavMesh;
     internal AllyAimUI aimUI;
 
@@ -21,10 +22,11 @@ public abstract class SkillBase : MonoBehaviour
     internal int attackDmg = 200;
     internal int AttRate;
     internal float skillTimeRate = 1.3f;
+    public bool IsReady = true;
 
     [Header("Feather 관련 변수")]
-    [SerializeField] private LayerMask featherLayer;
-    [SerializeField] private float featherDist = 14;
+    [SerializeField] internal LayerMask featherLayer;
+    [SerializeField] internal float featherDist = 14;
     internal float featherEftTime = 0.2f;
     internal float featherTime = 10;
     private float particleEftTime = 0.2f;
@@ -32,51 +34,67 @@ public abstract class SkillBase : MonoBehaviour
     [Header("Scan 관련 변수")]
     private Collider[] targets;
     internal float scanRange = 100;
-    [SerializeField] private LayerMask targetLayer;
+    [SerializeField] internal LayerMask targetLayer;
 
     [Header("Timing 관련 변수")]
     protected float lastUsedTime;
-    internal int BSkillTime = 4;
-    internal int ESkillTime = int.MaxValue;
-    internal int RSkillTime = int.MaxValue;
-    internal int PSkillTime = 0;
-    internal int EVSkillTime = int.MaxValue;
+    public event Action<SkillBase> OnReady;
+    public float Cooldown { get; set; }
+    public float SkillTime;
 
     [Header("Etc")]
     internal Transform nearestTarget;
-    internal Vector3 dirB;
-    internal bool pAble = false;
+    internal Vector3 attackDir;
 
     public IObjectPool<GameObject> featherPool { get; set; }
     public IObjectPool<GameObject> attackParticlePool { get; set; }
     public IObjectPool<GameObject> dmgParticlePool { get; set; }
-    public float Cooldown { get; set; }
-    public int Priority { get; protected set; } // 스킬이 겹치면 어떤 스킬부터 실행할지 우선순위 부여
 
-    private void Awake()
+    public void Start()
     {
         anim = GetComponentInChildren<Animator>();
         allyBody = GameObject.Find("AllyBody");
-        attackMng = GetComponent<AttackManager>();
         hpSystem = GetComponent<AIlyHPSystem>();
         aimUI = GetComponentInChildren<AllyAimUI>();
         playerManager = GameObject.Find("H_PlayerManager").GetComponent<H_PlayerManager>();
+        attackManager = GetComponent<AttackManager>();
         allyNavMesh = GetComponent<AllyNavMesh>();
         targetLayer = LayerMask.GetMask("Enemy");
         featherLayer = LayerMask.GetMask("Feather");
 
-        attackMng.AddSkill(this);
-    }
-
-    public void Start()
-    {
         attackParticlePool = ObjectPoolManager.instance.attackParticlePool;
         dmgParticlePool = ObjectPoolManager.instance.damageParticlePool;
         featherPool = ObjectPoolManager.instance.featherPool;
+
+        StartSkillLoop().Forget();
     }
 
     #endregion
-    public virtual Transform GetNearestEnemy() 
+
+    private async UniTaskVoid StartSkillLoop()
+    {
+        while (gameObject.activeSelf)
+        {
+            await UniTask.Delay(TimeSpan.FromSeconds(Cooldown));
+            await UniTask.WaitUntil(() => IsReady);
+
+            // 쿨타임이 끝나면 매니저에게 요청, 실행 Queue 에 추가
+            OnReady?.Invoke(this);
+            await UniTask.Yield();
+        }
+    }
+
+    public void TryExecute()
+    {
+        Execute();
+    }
+
+    public virtual async UniTask Execute()
+    {
+        Debug.Log("Execute 실행");
+    }
+
+    public virtual Transform GetNearestEnemy()
     {
         Transform result = null;
         float dist = float.MaxValue;
@@ -85,43 +103,27 @@ public abstract class SkillBase : MonoBehaviour
 
         // 구에 오버랩된 게임오브젝트 중에 가장 가까운 적의 위치 찾기
         foreach (Collider target in targets)
+        {
+            float curDist = Vector3.Distance(allyBody.transform.position, target.transform.position);
+            if (curDist < dist)
             {
-                float curDist = Vector3.Distance(allyBody.transform.position, target.transform.position);
-                if (curDist < dist)
-                {
-                    dist = curDist;
-                    result = target.transform;
-                }
+                dist = curDist;
+                result = target.transform;
             }
+        }
 
         return result;
     }
-
-    public void TryExecute()
-    {
-        if (IsReady())
-        {
-            Execute();
-            lastUsedTime = Time.time;
-        }
-    }
-
-    public bool IsReady()
-    {
-        return Time.time >= lastUsedTime + Cooldown;
-    }
-
-    public abstract void Execute();
 
     // 레이캐스트로 적 감지 후 데미지 주기
     public virtual void ApplyDamageToPiercedTargets(Vector3 myDir, Vector3 dir)
     {
         //관통된 적들 찾기
         RaycastHit[] hitInfos = Physics.RaycastAll(
-            myDir, 
-            dir, 
-            featherDist, 
-            targetLayer); 
+            myDir,
+            dir,
+            featherDist,
+            targetLayer);
 
         // 정렬
         System.Array.Sort(hitInfos, (x, y) => x.distance.CompareTo(y.distance));
@@ -149,7 +151,7 @@ public abstract class SkillBase : MonoBehaviour
         // 적절한 위치와 방향에 생성
         GameObject feather = ObjectPoolManager.instance.featherPool.Get();
         feather.transform.localEulerAngles = new Vector3(0, 0, 0);
-        feather.transform.position = transform.position + dirB.normalized * featherDist;
+        feather.transform.position = transform.position + attackDir.normalized * featherDist;
 
         // 시간이 지나면 깃털이 사라지도록 코루틴을 걸어놓는다.
         Feather featherScript = feather.GetComponent<Feather>();

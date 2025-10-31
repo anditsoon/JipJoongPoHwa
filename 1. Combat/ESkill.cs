@@ -1,12 +1,13 @@
-﻿using System.Collections;
+﻿using Cysharp.Threading.Tasks;
+using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 
 public class ESkill : SkillBase
 {
     #region variables
-    private bool isESkill = false;
-    public bool IsESkill => isESkill;
+    private int ESkillTime = 0;
     private float animDelayTime = 0.6f;
 
     [SerializeField] private float eAttRate = 1.2f;
@@ -15,25 +16,30 @@ public class ESkill : SkillBase
 
     [SerializeField] private SkillPassive passive;
 
-    public ESkill()
+    private void Awake()
     {
+        IsReady = false;
         Cooldown = ESkillTime;
-        Priority = 4;
+    }
+
+    private void OnDisable()
+    {
+        IsReady = false;
     }
 
     #endregion
 
     // E 스킬 : 깃털 회수
-    public override void Execute()
+    public override async UniTask Execute()
     {
-        StartCoroutine(StartESkill());
+        await ExecuteESkill();
     }
 
-    public IEnumerator StartESkill()
+    private async UniTask ExecuteESkill()
     {
-        isESkill = true;
+        attackManager.IsOnSkill = true;
         anim.SetTrigger("ESKILL");
-        yield return new WaitForSeconds(animDelayTime);
+        await UniTask.Delay(TimeSpan.FromSeconds(animDelayTime));
 
         // 주변의 깃털 스캔
         Collider[] feathers = Physics.OverlapSphere(transform.position, scanRange, featherLayer);
@@ -65,10 +71,11 @@ public class ESkill : SkillBase
         // 회수한 깃털이 30개 이상이면 패시브 스킬을 사용할 수 있다.
         if (feathers.Length >= 30 && !passive.isPAttack)
         {
-            passive.pAble = true;
+            passive.IsReady = true;
+           // passive.pAble = true;
         }
 
-        isESkill = false;
+        attackManager.IsOnSkill = false;
         anim.SetTrigger("BLEND_TREE");
     }
 
@@ -85,16 +92,16 @@ public class ESkill : SkillBase
         {
             hitinfo.transform.GetComponent<EnemyHp>().UpdateHp(attackDmg * eAttRate);
             DamageParticle(hitinfo.transform.position + Vector3.up);
-            StartCoroutine(StopEnemy(hitinfo));
+            _ = StopEnemyAsync(hitinfo);
         }
     }
 
     // E 스킬 때 에너미 멈추게 함
-    private IEnumerator StopEnemy(RaycastHit hitinfo)
+    private async UniTaskVoid StopEnemyAsync(RaycastHit hitinfo)
     {
         NavMeshAgent agent = hitinfo.transform.GetComponent<NavMeshAgent>();
-        if(agent != null) agent.enabled = false;
-        yield return new WaitForSeconds(enmStopTime);
+        if (agent != null) agent.enabled = false;
+        await UniTask.Delay(TimeSpan.FromSeconds(enmStopTime));
         if (hitinfo.transform != null) hitinfo.transform.GetComponent<NavMeshAgent>().enabled = true;
     }
 }

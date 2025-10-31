@@ -1,52 +1,55 @@
-﻿using System.Collections;
+﻿using Cysharp.Threading.Tasks;
+using System.Collections;
 using UnityEngine;
 
 public class SkillPassive : SkillBase
 {
     [Header("Passive Attack 관련 변수")]
+    internal int PSkillTime = 0;
     private float curPAttTime = 0;
     private const float P_SKILL_DURATION = 15;
     internal bool isPAttack = false;
     [SerializeField] private GameObject featherAFactory;
     internal float batRate = 1.05f;
     private float batRateIncreaseRatio = 0.1f;
+    internal bool pAble = false;
 
     [Header("베지어 곡선을 위한 벡터들")]
     Vector3 p1, p2, p3, p4, p5, p6, p7, p8;
     Vector3 dirP;
 
-    public SkillPassive()
+    private void Awake()
     {
+        IsReady = false;
         Cooldown = PSkillTime;
-        Priority = 2;
     }
 
-    private void Update()
+    private void OnDisable()
     {
-        if (!hpSystem.IsDead)
-        {
-            batRate = 1.05f + batRateIncreaseRatio * playerManager.indexLev;
-        }
+        IsReady = false;
     }
 
-    public override void Execute()
+    public override async UniTask Execute()
     {
-        if (pAble)
-        {
-            StartCoroutine(SkillTimeFast());
-            StartCoroutine(PassiveAttack());
-        }
-        pAble = false;
+        IsReady = false;
+        //if (IsReady)
+        //{
+        batRate = 1.05f + batRateIncreaseRatio * playerManager.indexLev;
+            var timeFastTask = SkillTimeFastAsync();
+            await PassiveAttackAsync();
+            await timeFastTask;
+        //}
+        //pAble = false;
     }
 
-    public IEnumerator SkillTimeFast()
+    private async UniTask SkillTimeFastAsync()
     {
         skillTimeRate = 1.1f;
-        yield return new WaitForSeconds(P_SKILL_DURATION);
+        await UniTask.Delay(System.TimeSpan.FromSeconds(P_SKILL_DURATION));
         skillTimeRate = 1f;
     }
 
-    public IEnumerator PassiveAttack()
+    private async UniTask PassiveAttackAsync()
     {
         curPAttTime = 0;
         isPAttack = true;
@@ -56,7 +59,7 @@ public class SkillPassive : SkillBase
             Transform targetP = GetNearestEnemy();
             if (targetP == null)
             {
-                yield return null;
+                await UniTask.Yield();
                 continue;
             }
             p4 = targetP.position;
@@ -98,13 +101,13 @@ public class SkillPassive : SkillBase
                     feather1.transform.position = Vector3.Lerp(p5, p6, time);
                     feather2.transform.position = Vector3.Lerp(p7, p8, time);
 
-                    yield return null;
+                    await UniTask.Yield();
                 }
 
-                Destroy(feather1);
-                Destroy(feather2);
+                if (feather1 != null) Destroy(feather1);
+                if (feather2 != null) Destroy(feather2);
 
-                yield return null;
+                await UniTask.Yield();
             }
 
             if (targetP != null && targetP.GetComponent<EnemyMove>() != null)
@@ -112,7 +115,7 @@ public class SkillPassive : SkillBase
                 targetP.GetComponent<EnemyHp>().UpdateHp(attackDmg * batRate * attackNum);
                 DamageParticle(targetP.transform.position + Vector3.up);
             }
-            yield return new WaitForSeconds(1f);
+            await UniTask.Delay(System.TimeSpan.FromSeconds(1f));
             curPAttTime += 1;
         }
 

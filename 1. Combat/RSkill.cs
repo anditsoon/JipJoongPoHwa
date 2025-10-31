@@ -1,51 +1,57 @@
-﻿using System.Collections;
+﻿using Cysharp.Threading.Tasks;
+using System;
+using System.Collections;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class RSkill : SkillBase
 {
-    internal bool isRSkill = false;
+    private int RSkillTime = 0;
     [SerializeField] private float featherRNo = 24;
     private float animDelayTime = 0.8f;
 
     private bool unbeatable = false;
     public bool Unbeatable => unbeatable;
 
-    public RSkill()
+    private void Awake()
     {
+        IsReady = false;
         Cooldown = RSkillTime;
-        Priority = 3;
     }
 
-    private void Update()
+    private void OnDisable()
     {
-        if(Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            Execute();
-        }
+        IsReady = false;
     }
 
-    public override void Execute()
+    public override async UniTask Execute()
     {
-        isRSkill = true;
+        attackManager.IsOnSkill = true;
 
-        StartCoroutine(SetUnbeatable());
-        StartCoroutine(AttackRSkill());
+        var unbeatableTask = SetUnbeatableAsync();
+        await AttackRSkillAsync();
+
+        // 무적 상태가 남아있으면 완료될 때까지 기다림
+        await unbeatableTask;
+
+        attackManager.IsOnSkill = false;
+        anim.SetTrigger("BLEND_TREE");
     }
 
     // R 스킬 때 무적 상태, 속도 빨라짐
-    private IEnumerator SetUnbeatable()
+    private async UniTask SetUnbeatableAsync()
     {
         unbeatable = true;
         allyNavMesh.moveSpeed *= 2;
-        yield return new WaitForSeconds(2f);
+        await UniTask.Delay(TimeSpan.FromSeconds(2f));
         unbeatable = false;
         allyNavMesh.moveSpeed /= 2;
     }
 
-    public IEnumerator AttackRSkill()
+    private async UniTask AttackRSkillAsync()
     {
         anim.SetTrigger("RSKILL");
-        yield return new WaitForSeconds(animDelayTime);
+        await UniTask.Delay(TimeSpan.FromSeconds(animDelayTime));
 
         for (int i = 1; i <= featherRNo; i++)
         {
@@ -63,8 +69,5 @@ public class RSkill : SkillBase
 
             PlaceFeather();
         }
-
-        isRSkill = false;
-        anim.SetTrigger("BLEND_TREE");
     }
 }

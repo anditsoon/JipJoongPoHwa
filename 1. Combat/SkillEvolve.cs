@@ -1,10 +1,13 @@
-﻿using System.Collections;
+﻿using Cysharp.Threading.Tasks;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
 public class SkillEvolve : SkillBase
 {
+    internal int EVSkillTime = 0;
     [SerializeField] private GameObject evFeatherPrefab;
     private float featherSpeed = 10;
     private int bounceCount = 3;
@@ -12,29 +15,34 @@ public class SkillEvolve : SkillBase
     private float shieldDuration = 5f;
     private float healPerBounceRate = 0.1f;
 
-    public SkillEvolve()
+    private void Awake()
     {
+        IsReady = false;
         Cooldown = EVSkillTime;
-        Priority = 2;
     }
 
-    public override void Execute()
+    private void OnDisable()
     {
-        StartCoroutine(EvolveCrt());
+        IsReady = false;
+    }
+
+    public override async UniTask Execute()
+    {
+        await EvolveAsync();
     }
 
     // 기본무기 강화 (연인의 도탄)
-    public IEnumerator EvolveCrt()
+    private async UniTask EvolveAsync()
     {
         // Feather 생성
         GameObject feather = Instantiate(evFeatherPrefab, transform.position, Quaternion.identity);
         feather.layer = LayerMask.NameToLayer("Feather");
 
         List<(Vector3 dir, Collider collider)> enemies = GetEnemies();
-        if(enemies.Count == 0)
+        if (enemies.Count == 0)
         {
             Destroy(feather);
-            yield break;
+            return;
         }
 
         // 튕기게 하기
@@ -53,7 +61,7 @@ public class SkillEvolve : SkillBase
                     targetPos,
                     featherSpeed * Time.deltaTime
                 );
-                yield return null;
+                await UniTask.Yield();
             }
 
             // 공격 처리
@@ -71,18 +79,18 @@ public class SkillEvolve : SkillBase
             if (i == bounceCount)
             {
                 Destroy(feather);
-                StartCoroutine(ActivateShield());
+                await ActivateShieldAsync();
                 hpSystem.UpdateHp(hpSystem.MaxHealth * healPerBounceRate * i);
             }
         }
     }
 
-    private IEnumerator ActivateShield()
+    private async UniTask ActivateShieldAsync()
     {
         shield.transform.position = transform.position;
         shield.SetActive(true);
 
-        yield return new WaitForSeconds(5f);
+        await UniTask.Delay(TimeSpan.FromSeconds(shieldDuration));
 
         shield.SetActive(false);
     }

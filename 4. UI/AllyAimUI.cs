@@ -23,7 +23,7 @@ public class AllyAimUI : MonoBehaviour
     {
         if(nearestTarget != null)
         {
-            transform.rotation = Quaternion.LookRotation(-transform.forward, bSkill.dirB);
+            transform.rotation = Quaternion.LookRotation(-transform.forward, bSkill.attackDir);
         }
     }
 }
